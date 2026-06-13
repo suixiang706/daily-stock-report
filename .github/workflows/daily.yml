@@ -2,8 +2,8 @@ name: 每日A股收盘简报
 
 on:
   schedule:
-    # 北京时间周一至周五 15:30（UTC 7:30）
-    - cron: "30 7 * * 1-5"
+    # 北京时间周一至周五 14:45（UTC 7:30）
+    - cron: "45 6 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -13,10 +13,10 @@ jobs:
   report:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
