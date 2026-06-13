@@ -28,6 +28,7 @@ jobs:
 
       - name: Commit report
         run: |
+          mkdir -p reports
           git config user.name "stock-bot"
           git config user.email "bot@stock.local"
           git add reports/
