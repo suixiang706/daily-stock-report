@@ -174,21 +174,25 @@ def generate_report():
     lines.append("## 大盘指数\n")
     lines.append("| 指数 | 收盘价 | 涨跌幅 |")
     lines.append("|------|--------|--------|")
+    index_data = {}
     for code, label in INDEXES:
         d = fetch_index_value(code)
         if d:
+            index_data[label] = d
             arrow = "🔴" if d["change"] < 0 else "🟢" if d["change"] > 0 else "⚪"
             lines.append(f"| {label} | {d['price']:.2f} | {arrow} {d['change']:+.2f}% |")
     lines.append("")
 
     # ---- 个股 ----
     lines.append("## 监控个股\n")
+    stock_results = []
 
     for symbol, name in STOCKS:
         row = fetch_stock_data(symbol)
         if row is None:
             lines.append(f"### {name} ({symbol})\n")
             lines.append("> ⚠️ 数据获取失败\n")
+            stock_results.append((name, symbol, None))
             continue
 
         df = ak.stock_zh_a_hist(
@@ -200,7 +204,10 @@ def generate_report():
         if not ind:
             lines.append(f"### {name} ({symbol})\n")
             lines.append("> 数据不足\n")
+            stock_results.append((name, symbol, None))
             continue
+
+        stock_results.append((name, symbol, ind))
 
         arrow = "🔴" if ind["chg"] < 0 else "🟢" if ind["chg"] > 0 else "⚪"
         lines.append(f"### {name} ({symbol})  {arrow} {ind['chg']:+.2f}%\n")
@@ -228,6 +235,68 @@ def generate_report():
 
     print(f">>> 报告已生成: {filename}")
     print("\n".join(lines))
+
+    # 生成微信推送摘要
+    generate_push_summary(now, date_str, weekday, index_data, stock_results)
+    return index_data, stock_results
+
+
+def generate_push_summary(now, date_str, weekday, index_data, stock_results):
+    """生成 Server酱 微信推送摘要"""
+    push_lines = []
+
+    # 标题行（微信卡片标题）
+    sh_idx = index_data.get("上证指数", {})
+    title = f"{date_str.split('-')[1]}/{date_str.split('-')[2]} 简报"
+    if sh_idx:
+        arrow = "↑" if sh_idx["change"] > 0 else "↓" if sh_idx["change"] < 0 else "→"
+        title += f" 上证{arrow}{abs(sh_idx['change']):.1f}%"
+
+    # 找出涨跌最显著的个股加到标题
+    alerts = []
+    for name, symbol, ind in stock_results:
+        if not ind:
+            continue
+        if abs(ind["chg"]) > 3:
+            alerts.append(f"{name}{'🔴' if ind['chg']<0 else '🟢'}{ind['chg']:+.1f}%")
+    if alerts:
+        title += " " + " ".join(alerts[:2])
+
+    body = []
+
+    # 指数一行
+    idx_parts = []
+    for label, data in index_data.items():
+        if data:
+            a = "↑" if data["change"] > 0 else "↓" if data["change"] < 0 else "→"
+            idx_parts.append(f"{label} {data['price']:.1f} {a}{data['change']:+.2f}%")
+    body.append("  ".join(idx_parts))
+    body.append("")
+
+    # 个股（每只一行）
+    for name, symbol, ind in stock_results:
+        if not ind:
+            body.append(f"**{name}** ⚠️ 数据获取失败")
+            continue
+        arrow = "↑" if ind["chg"] > 0 else "↓" if ind["chg"] < 0 else "→"
+        line = f"**{name}** {arrow}{ind['chg']:+.2f}% {ind['close']:.2f}"
+        if ind["vol_ratio"] > 1.5:
+            line += " | 放量"
+        if ind["signals"]:
+            line += f" | {' '.join(ind['signals'])}"
+        line += f"\n  MA5={ind['ma5']} MA20={ind['ma20']} | KDJ K={ind['k']:.0f} J={ind['j']:.0f} | 布林{ind['bb_pos']:.0f}%"
+        body.append(line)
+
+    body.append("")
+    body.append(f"[查看完整报告](https://github.com/suixiang706/daily-stock-report/tree/main/reports)")
+
+    # 写入推送文件
+    push_file = os.path.join(REPORT_PATH, "push_summary.txt")
+    with open(push_file, "w", encoding="utf-8") as f:
+        f.write(title + "\n")
+        f.write("\n".join(body))
+
+    print(f">>> 推送摘要已生成: {push_file}")
 
 
 if __name__ == "__main__":
