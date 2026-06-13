@@ -1,16 +1,39 @@
-1	name: 每日A股收盘简报
-2	
-3	on:
-4	  schedule:
-5	    # 北京时间周一至周五 15:30（UTC 7:30）
-6	    - cron: "30 7 * * 1-5"
-7	  workflow_dispatch:  # 允许手动触发
-8	
-9	jobs:
-10	  report:
-11	    runs-on: ubuntu-latest
-12	    steps:
-13	      - uses: actions/checkout@v4
-14	
-15	      - name: Setup Python
-... 22 more lines
+name: 每日A股收盘简报
+
+on:
+  schedule:
+    # 北京时间周一至周五 15:30（UTC 7:30）
+    - cron: "30 7 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily report
+        run: python daily_report.py
+
+      - name: Commit report
+        run: |
+          git config user.name "stock-bot"
+          git config user.email "bot@stock.local"
+          git add reports/
+          if git diff --cached --quiet; then
+            echo "无新报告，跳过提交"
+          else
+            git commit -m "📊 $(date +%Y-%m-%d) 收盘简报"
+            git push
+          fi
