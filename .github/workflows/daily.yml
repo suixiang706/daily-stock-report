@@ -2,7 +2,7 @@ name: 每日A股收盘简报
 
 on:
   schedule:
-    # 北京时间周一至周五 14:45（UTC 7:30）
+    # 北京时间周一至周五 14:45（UTC 6:45）
     - cron: "45 6 * * 1-5"
   workflow_dispatch:
 
@@ -38,3 +38,20 @@ jobs:
             git commit -m "📊 $(date +%Y-%m-%d) 收盘简报"
             git push
           fi
+
+      - name: Push to WeChat
+        if: success()
+        env:
+          SCTKEY: ${{ secrets.SERVERCHAN_KEY }}
+        run: |
+          if [ -f reports/push_summary.txt ]; then
+            TITLE=$(head -1 reports/push_summary.txt)
+            BODY=$(tail -n +2 reports/push_summary.txt)
+            curl -s -X POST "https://sctapi.ftqq.com/${SCTKEY}.send" \
+              -d "title=${TITLE}" \
+              --data-urlencode "desp=${BODY}"
+            echo ">>> 微信推送完成"
+          else
+            echo ">>> 无推送摘要，跳过"
+          fi
+
